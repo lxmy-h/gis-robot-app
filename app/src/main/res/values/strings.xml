@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GIS内检机器人</string>
+    <string name="loading">正在连接…</string>
+    <string name="connecting">正在连接\n%1$s\n\n机器人刚开机时可能需要等 60~120 秒，连上会自动进入画面。</string>
+    <string name="connecting_failed">%1$s\n\n已尝试 %2$d 次。%3$s\n\n请确认：\n· 平板已连上手机热点\n· 机器人已开机</string>
+    <string name="refresh">刷新</string>
+    <string name="cancel">取消</string>
+    <string name="save_and_reload">保存并刷新</string>
+    <string name="settings_title">连接设置</string>
+    <string name="settings_hint">网页地址（例如 http://172.20.10.10:5000）</string>
+    <string name="mag_handle">显示画面放大按钮（放大后点 × 退出）</string>
+</resources>
