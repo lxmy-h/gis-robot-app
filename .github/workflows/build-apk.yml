@@ -1,0 +1,81 @@
+name: Build APK
+
+# 触发条件：
+#  - 往 main/master 推代码
+#  - 网页上点 "Run workflow" 手动跑
+#  - 打 tag（例如 v1.0）：额外自动发一个 Release，平板上可以直接点链接下载安装
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. 取出代码
+        uses: actions/checkout@v4
+
+      - name: 2. 装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # 工程里没有 gradle-wrapper.jar（二进制文件不便用文本上传），
+      # 所以直接从官方地址下 Gradle 装上，最稳，不依赖第三方 action 的版本。
+      - name: 3. 装 Gradle 8.7
+        run: |
+          curl -sSL https://services.gradle.org/distributions/gradle-8.7-bin.zip -o /tmp/gradle.zip
+          sudo unzip -q /tmp/gradle.zip -d /opt
+          sudo ln -sf /opt/gradle-8.7/bin/gradle /usr/local/bin/gradle
+          gradle --version
+
+      # 缓存 debug 签名用的 keystore。
+      # 不缓存的话每次构建都是新的随机密钥，新 APK 无法覆盖安装旧版本（会报"应用未安装"）。
+      - name: 4. 缓存签名文件（保证能覆盖升级）
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1
+
+      - name: 5. 编译 APK
+        run: |
+          # 自动找工程根目录：文件传到仓库根目录、或整个文件夹被上传成子目录，两种情况都能编译
+          ROOT=$(dirname "$(find . -name settings.gradle.kts -not -path '*/build/*' | head -n1)")
+          if [ ! -f "$ROOT/settings.gradle.kts" ]; then
+            echo "::error::找不到 settings.gradle.kts，代码没传全"
+            exit 1
+          fi
+          echo "工程根目录: $ROOT"
+          gradle -p "$ROOT" :app:assembleDebug --no-daemon --stacktrace
+
+      - name: 6. 收集 APK
+        run: |
+          mkdir -p out
+          find . -name 'app-debug.apk' -exec cp -v {} out/ \;
+          ls -l out
+
+      - name: 7. 上传 APK（在 Actions 页面底部的 Artifacts 里下载）
+        uses: actions/upload-artifact@v4
+        with:
+          name: gis-robot-app-apk
+          path: out/app-debug.apk
+          retention-days: 90
+
+      # 只有打了 tag 才执行：把 APK 挂到 Release 上，得到一个可在平板浏览器直接下载的链接
+      - name: 8. 打 tag 时发布 Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/app-debug.apk
+          name: ${{ github.ref_name }}
+          body: |
+            GIS内检机器人 App（网页套壳）。
+
+            安装：下载下面的 `app-debug.apk`，在平板上允许"安装未知来源应用"后安装。
+            连不上机器人时：App 会自动重试；按音量下键可手动刷新。
